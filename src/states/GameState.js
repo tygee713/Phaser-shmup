@@ -3,6 +3,8 @@ var ground
 var ledge
 var player
 var enemies
+var horizontalEnemies
+var boss
 var game
 var cursors
 var stars
@@ -14,8 +16,10 @@ var pad1
 var bullets
 var playerBullets
 var enemyBullets
+var bossBullets
 var playerFireRate = 200
-var enemyFireRate = 500
+var enemyFireRate = 800
+var bossFireRate = 100
 var playerNextFire = 0
 
 export default class GameState extends Phaser.State {
@@ -29,6 +33,7 @@ export default class GameState extends Phaser.State {
     this.game.load.spritesheet('dude', '/assets/dude.png', 32, 48)
     this.game.load.spritesheet('baddie', '/assets/baddie.png', 32, 32)
     this.game.load.image('button', 'assets/button.png')
+    this.game.load.image('cat', 'assets/cat.png')
   }
 
 	create () {
@@ -45,6 +50,7 @@ export default class GameState extends Phaser.State {
     player.body.collideWorldBounds = true
     player.anchor.setTo(0.5, 0.5)
     player.health = 3
+    player.dashed = false
 
     stars = game.add.group()
     stars.enableBody = true
@@ -56,16 +62,34 @@ export default class GameState extends Phaser.State {
     for (var i = 1; i < 5; i++) {
       enemies.create(32 + (100 * i), Math.floor(Math.random() * 200), 'baddie')
     }
-    
+
+    horizontalEnemies = game.add.group()
+    horizontalEnemies.create(0, Math.floor(Math.random() * 200), 'cat')
+
+    game.physics.arcade.enable(horizontalEnemies)
     game.physics.arcade.enable(enemies)
     enemies.forEach(function(enemy) {
       enemy.health = 2
       enemy.nextFire = 0
     })
 
+    horizontalEnemies.forEach(function(enemy) {
+      enemy.direction = 'right'
+    })
+
+    // boss = game.add.sprite(200, 20, 'cat')
+    // game.physics.arcade.enable(boss)
+    // boss.anchor.setTo(0.5, 0.5)
+    // boss.health = 100
+    // boss.nextFire = 0
+    // boss.shootingAngle = 0
+
     // cursors = game.input.keyboard.createCursorKeys()
     game.input.gamepad.start()
     pad1 = game.input.gamepad.pad1
+
+    // Alternative way to do button press callbacks
+    // pad.addCallbacks(this, { onConnect: addButtons });
 
     score = 0
     scoreText = game.add.text(16, 16, 'score: 0', { fontSize: '16px', fill: '#000' })
@@ -79,8 +103,10 @@ export default class GameState extends Phaser.State {
     bullets = game.add.group()
     playerBullets = game.add.group()
     enemyBullets = game.add.group()
+    // bossBullets = game.add.group()
     bullets.add(playerBullets)
     bullets.add(enemyBullets)
+    // bullets.add(bossBullets)
     bullets.forEach(function(bulletGroup) { 
       bulletGroup.enableBody = true
       bulletGroup.physicsBodyType = Phaser.Physics.ARCADE
@@ -89,6 +115,11 @@ export default class GameState extends Phaser.State {
       bulletGroup.setAll('outOfBoundsKill', true)
     })
 	}
+
+  // Alternative way to do button press callbacks
+  // addButtons () {
+  //   buttonA = pad.getButton(Phaser.Gamepad.XBOX360_A);
+  // }
 
   update () {
     if (player.alive) {
@@ -106,6 +137,51 @@ export default class GameState extends Phaser.State {
           game.physics.arcade.moveToObject(bullet, player, 300)
         }
       })
+
+      horizontalEnemies.forEach(function(enemy) {
+        if (!enemy.nextYPosition) {
+          var plusOrMinus = Math.random() < 0.3 ? -1 : 1
+          enemy.nextYPosition = 
+            plusOrMinus < 0 ?
+              enemy.position.y + (Math.floor(Math.random() * 10) + 20) * plusOrMinus
+            :
+              enemy.position.y + (Math.floor(Math.random() * 10) + 30) * plusOrMinus
+        }
+        if (enemy.position.x <= 0) {
+          enemy.direction = 'right'
+        }
+        if (game.world.width - 20 < enemy.position.x) {
+          enemy.direction = 'left'
+        }
+        if (enemy.direction === 'right') {
+          enemy.position.x += 2
+        }
+        if (enemy.direction === 'left') {
+          enemy.position.x -= 2
+        }
+        if (enemy.position.y <= enemy.nextYPosition) {
+          enemy.position.y += 2
+          if (enemy.position.y >= enemy.nextYPosition) {
+            enemy.nextYPosition = null
+          }
+        }
+        if (enemy.position.y >= enemy.nextYPosition) {
+          enemy.position.y -= 2
+          if (enemy.position.y <= enemy.nextYPosition) {
+            enemy.nextYPosition = null
+          }
+        }
+      })
+
+      // Code for boss character once re-enabled
+      // if (boss.alive && game.time.now > boss.nextFire && player.alive) {
+      //   boss.nextFire = game.time.now + bossFireRate
+      //   var bullet = bossBullets.getFirstDead()
+      //   bullet.reset(boss.x, boss.y)
+      //   bullet.body.gravity.x = 50
+      //   game.physics.arcade.velocityFromAngle(boss.shootingAngle, 300, bullet.body.velocity)
+      //   boss.shootingAngle += 10
+      // }
 
       // Star velocity
       stars.forEach(function(star) {
@@ -135,7 +211,15 @@ export default class GameState extends Phaser.State {
         // player.animations.stop()
         // this.dictateDirection()
         player.body.velocity.y = 150
-      } 
+      }
+
+      if (pad1.isDown(Phaser.Gamepad.XBOX360_A) && !player.dashed) {
+        // TODO: determine direction currently moving
+        player.body.position.y -= 50
+        player.dashed = true
+      } else if (pad1.isUp(Phaser.Gamepad.XBOX360_A)) {
+        player.dashed = false
+      }
 
       // else {
       //   player.animations.stop()
@@ -237,7 +321,7 @@ export default class GameState extends Phaser.State {
     player.tint = 0xff0000
     player.health -= 1
     if (player.health == 0) {
-      player.kill()
+      // player.kill()
     }
   }
 
@@ -245,7 +329,7 @@ export default class GameState extends Phaser.State {
     player.tint = 0xff0000
     player.health -= 1
     if (player.health == 0) {
-      player.kill()
+      // player.kill()
     }
   }
 
